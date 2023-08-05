@@ -9,9 +9,14 @@
 
 </body>
 <script type="text/javascript">
-	const data = {
-    text: 'hello world',
-    ok: true
+	// const data = {
+  //   text: 'hello world',
+  //   ok: true
+  // }
+
+  const data = {
+    foo: 1,
+    bar: true
   }
 
   const bucket = new WeakMap()
@@ -60,19 +65,39 @@
     const effects = depsMap.get(key)
 
     // effects && effects.forEach(fn => fn())
-    const effectsToRun = new Set(effects)
-    effectsToRun.forEach(effectFn => effectFn())
+    const effectsToRun = new Set()
+    // 如果trigger触发执行的副作用函数与当前正在执行的副作用函数想听，则不触发执行
+    effects && effects.forEach(effectFn => {
+      if (effectFn !== activeEffect) {
+        effectsToRun.add(effectFn)
+      }
+    })
+    effectsToRun.forEach(effectFn => {
+      // 如果副作用函数存在调度器，则调用该调度器，并将副作用函数作为参数传递
+      if (effectFn.options.scheduler) {
+        effectFn.options.scheduler(effectFn)
+      } else {
+        effectFn()
+      }
+    })
   }
 
   let activeEffect
+  const effectStack = []
 
-  function effect (fn) {
+  function effect (fn, options = {}) {
     const effectFn = () => {
       // cleanup函数完成清除工作
       cleanup(effectFn)
       activeEffect = effectFn
+      // 在调用副作用函数前将当前副作用函数压入栈中
+      effectStack.push(effectFn)
       fn()
+      // 在当前副作用函数执行完毕，将当前富作用函数出栈，并把activeEffect还原为之前的值
+      effectStack.pop()
+      activeEffect = effectStack[effectStack.length - 1]
     }
+    effectFn.options = options
     effectFn.deps = []
     effectFn()
   }
@@ -87,10 +112,53 @@
     effectFn.deps.length = 0
   }
 
-  effect(() => {
-    console.log('run')
-    document.body.innerText = obj.ok ? obj.text : 'not'
-  })
+  const jobQueue = new Set()
+  const p = Promise.resolve()
+  let isFlushing = false
+  function flushJob () {
+    if (isFlushing) return
+    isFlushing = true
+    p.then(() => {
+      jobQueue.forEach(job => job())
+    }).finally(() => {
+      isFlushing = false
+    })
+  }
+  // demo-1
+  // effect(() => {
+  //   console.log('run')
+  //   document.body.innerText = obj.ok ? obj.text : 'not'
+  // })
 
+  // demo-2
+  // let temp1, temp2
+  // effect(function effectFn1 () {
+  //   console.log('effectFn1 执行')
+  //   effect(function effectFn2 () {
+  //     console.log('effectFn2 执行')
+  //     temp2 = obj.bar
+  //   })
+  //   temp1 = obj.foo
+  // })
+  // console.log('***************')
+  // obj.foo = false
+
+  // demo-3
+  // effect(() => {
+  //   obj.foo++
+  // })
+
+  // demo-4
+  effect(() => {
+    console.log(obj.foo)
+  }, {
+    scheduler(fn) {
+      jobQueue.add(fn)
+      flushJob()
+    }
+  })
+  obj.foo++
+  obj.foo++
+  // console.log('end')
 </script>
 </html>
