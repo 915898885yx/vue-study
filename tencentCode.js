@@ -125,7 +125,7 @@ const init = async () => {
       const drag = document.querySelector('.tc-fg-item')
       const boundingBox = drag.getBoundingClientRect()
       return {
-        coordinateShift: coordinateShift - 40,
+        coordinateShift: coordinateShift / window.devicePixelRatio - 40,
         el: {
           x: boundingBox.x + (boundingBox.width / 2),
           y: boundingBox.y + (boundingBox.height / 2)
