@@ -92,7 +92,7 @@
 
   const obj = new Proxy(data, proxyConfig)
 
-  function track (target, key) {
+  function track (target, key) { 
     if (!activeEffect || !shouldTrack) return target[key]
 
     let depsMap = bucket.get(target)
@@ -113,7 +113,6 @@
   }
 
   function trigger (target, key, type, newVal) {
-    debugger
     const depsMap = bucket.get(target)
 
     if (!depsMap) return
@@ -409,7 +408,7 @@
           return Reflect.get(arrayInstrumentations, key, receiver)
         }
         // 添加判断，如果key的类型是Symbol，则不进行跟踪
-        if (!isReadonly && typeof key === 'symbol') {
+        if (!isReadonly && typeof key !== 'symbol') {
           track(target, key)
         }
 
@@ -545,23 +544,19 @@
     })
   }
 
-  // function renderer (domString, container) {
-  //   container.innerHTML = domString
-  // }
-  // const count = ref(1)
+  function renderer (domString, container) {
+    container.innerHTML = domString
+  }
+  const count = ref(1)
   
-  // effect(() => {
-  //   // renderer(`<span>${count.value}</span>`, document.getElementById('app'))
-  //   console.log(count.value, 'count')
-  // })
-  // count.value++
-  
-  
-  
+  effect(() => {
+    renderer(`<span>${count.value}</span>`, document.getElementById('app'))
+  })
+  count.value++
 
   // const _reactive = reactive({a:2, obj: { b: 1 }})
   // effect(() => {
-  //   console.log(_reactive.obj.b, '***')
+  //   console.log(_reactive.a, '***')
   // })
   // _reactive.obj.b = 2
 
