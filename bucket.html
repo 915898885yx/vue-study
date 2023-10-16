@@ -25,20 +25,6 @@
   const bucket = new WeakMap()
   console.log(bucket, 'bucket')
   const ITERATE_KEY = Symbol()
-  // 一个标记变量，代表是否进行跟踪
-  let shouldTrack = true
-  const arrayInstrumentations = {}
-  ;['push', 'pop', 'shift', 'unshift', 'splice'].forEach(method => {
-    const originMethod = Array.prototype[method]
-    // 重写方法
-    arrayInstrumentations[method] = function (...args) {
-      // 调用原始方法前，禁止追踪
-      shouldTrack = false
-      const res = originMethod.apply(this, args)
-      shouldTrack = true
-      return res
-    }
-  })
 
   const proxyConfig = {
     get (target, key, receiver) {
@@ -93,7 +79,7 @@
   const obj = new Proxy(data, proxyConfig)
 
   function track (target, key) {
-    if (!activeEffect || !shouldTrack) return target[key]
+    if (!activeEffect) return target[key]
 
     let depsMap = bucket.get(target)
 
@@ -113,7 +99,6 @@
   }
 
   function trigger (target, key, type, newVal) {
-    debugger
     const depsMap = bucket.get(target)
 
     if (!depsMap) return
@@ -372,24 +357,6 @@
   // obj.foo++
 
   // reactive
-  
-  ;['includes', 'indexOf', 'lastIndexOf'].forEach(method => {
-    const originMethod = Array.prototype[method]
-    arrayInstrumentations[method] = function (...args) {
-      // this 是代理对象，先在代理对象中查找，将结果存储到 res 中
-      let res = originMethod.apply(this, args)
-
-      if (res === false || res === -1) {
-        // res 为 false 说明没找到，通过 this.raw 拿到原始数组，再去其中查找并更新 res 值
-        res = originMethod.apply(this.raw, args)
-      }
-      // 返回最终结果
-      return res
-    }
-  })
-
-
-
   function createReactive (data, isShallow = false, isReadonly = false) {
     return new Proxy(data, {
       ...proxyConfig,
@@ -399,19 +366,7 @@
         if (key === 'raw') {
           return target
         }
-        // if (key === 'size') {
-        //   track(target, ITERATE_KEY)
-        //   return Reflect.get(target, key, receiver)
-        // }
-        // 如果操作的目标对象是数组，并且 key 存在于arrayInstrumentations 上，
-        // 那么返回定义在 arrayInstrumentations 上的值
-        if (Array.isArray(target) && arrayInstrumentations.hasOwnProperty(key)) {
-          return Reflect.get(arrayInstrumentations, key, receiver)
-        }
-        // 添加判断，如果key的类型是Symbol，则不进行跟踪
-        if (!isReadonly && typeof key === 'symbol') {
-          track(target, key)
-        }
+        track(target, key)
 
         const res = Reflect.get(target, key, receiver)
 
@@ -466,17 +421,8 @@
     })
   }
   // 深响应
-  const reactiveMap = new Map()
   function reactive (data) {
     return createReactive(data)
-    // 优先通过原始对象data寻找之前创建的代理对象，如果找到了，直接返回已有的代理对象
-    // const existingProxy = reactiveMap.get(data)
-    // if (existingProxy) return existingProxy
-    // // 否则创建一个新的代理对象
-    // const proxy = createReactive(data)
-    // // 存储到map中，从何避免重复创建
-    // reactiveMap.set(data, proxy)
-    // return proxy
   }
   // 浅响应
   function shallowReactive (data) {
@@ -489,6 +435,10 @@
   // 浅只读
   function shallowReadonly (data) {
     return createReactive(data, true, true)
+  }
+
+  function renderer (domString, container) {
+    container.innerHTML = domString
   }
 
   function ref (val) {
@@ -545,20 +495,11 @@
     })
   }
 
-  // function renderer (domString, container) {
-  //   container.innerHTML = domString
-  // }
-  // const count = ref(1)
-  
-  // effect(() => {
-  //   // renderer(`<span>${count.value}</span>`, document.getElementById('app'))
-  //   console.log(count.value, 'count')
-  // })
-  // count.value++
-  
-  
-  
-
+  const count = ref(1)
+  effect(() => {
+    renderer(`<div>${count.value}</div>`, document.getElementById('app'))
+  })
+  count.value++
   // const _reactive = reactive({a:2, obj: { b: 1 }})
   // effect(() => {
   //   console.log(_reactive.obj.b, '***')
@@ -573,9 +514,5 @@
   // })
   // arr[1] = 'bar'
   // arr.length = 0
-
-  // const obj1 = {}
-  // const arr = reactive([obj1])
-  // console.log(arr.includes(obj1))
 </script>
 </html>
