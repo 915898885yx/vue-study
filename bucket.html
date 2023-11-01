@@ -544,15 +544,29 @@
     })
   }
 
-  function renderer (domString, container) {
-    container.innerHTML = domString
-  }
+  // 文本节点type标识
+  const Text = Symbol()
+  // 注释节点type标识
+  const Comment = Symbol()
+  // Fragment节点
+  const Fragment = Symbol()
+  // const newVNode = {
+  //   type: Text,
+  //   children: '文本内容'
+  // }
+  // const newVNode = {
+  //   type: Comment,
+  //   children: '注释内容'
+  // }
+  // function renderer (domString, container) {
+  //   container.innerHTML = domString
+  // }
   function shouldSetAsProps (el, key, value) {
     if (key === 'form' && el.tagName === 'INPUT') return false
     return key in el
   }
   function createRenderer (options) {
-    const { createElement, setElementText, insert, patchProps } = options
+    const { createElement, setElementText, insert, patchProps, createText, setText } = options
     function mountElement (vnode, container) {
       // 创建DOM元素
       const el = vnode.el = createElement(vnode.type)
@@ -575,6 +589,78 @@
       }
       insert(el, container)
     }
+    function patchChildren (n1, n2, container) {
+      // 判断子节点的类型是否是文本节点
+      if (typeof n2.children === 'string') {
+        // 旧子节点的类型有三种可能：没有子节点、文本子节点以及一组子节点
+        // 只有当旧子节点为一组子节点时，才需要逐个卸载，其他情况不需要
+        if (Array.isArray(n1.children)) {
+          n1.children.forEach(c => unmount(c))
+        }
+        setElementText(container, n2.children)
+      } else if (Array.isArray(n2.children)) {
+        // 新节点是一组数据 Diff
+        const oldChildren = n1.children
+        const newChildren = n2.children
+        for (let i = 0; i < newChildren.length; i++) {
+          const newVNode = newChildren[i]
+          for (let j = 0; j < oldChildren.length; j++) {
+            const oldVNode = oldChildren[j]
+            if (newVNode.key === oldVNode.key) {
+              patch(oldVNode, newVNode, container)
+              break
+            }
+          }
+        }
+        /*
+          // 旧的一组子节点长度
+          const oldLen = oldChildren.length
+          // 新的一组子节点长度
+          const newLen = newChildren.length
+          // 两组子节点公共长度，两者较短
+          const commonLength = Math.min(oldLen, newLen)
+          for (let i = 0; i < commonLength; i++) {
+            patch(oldChildren[i], newChildren[i], container)
+          }
+          if (newLen > oldLen) {
+            for (let i = commonLength; i < newLen; i++) {
+              mount(newChildren[i], container)
+            }
+          } else {
+            for (let i = commonLength; i < oldLen; i++) {
+              unmount(oldChildren[i])
+            }
+          }
+        */
+      } else {
+        // 新的子节点不存在
+        // 旧子节点是一组节点，逐个卸载
+        if (Array.isArray(n1.children)) {
+          n1.children.forEach(c => unmount(c))
+        } else if (typeof n1.children === 'string') {
+          setElementText(container, '')
+        }
+        // 没有旧子节点，什么也不需要做
+      }
+    }
+    function patchElement (n1, n2) {
+      const el = n2.el = n1.el
+      const oldProps = n1.props
+      const newProps = n2.props
+      // 更新props
+      for (const key in newProps) {
+        if (newProps[key] !== oldProps[key]) {
+          patchProps(el, key, oldProps[key], newProps[key])
+        }
+      }
+      for (const key in oldProps) {
+        if (!(key in newProps)) {
+          patchProps(el, key, oldProps[key], null)
+        }
+      }
+      // 更新children
+      patchChildren(n1, n2, el)
+    }
     function patch (n1, n2, container) {
       // 如果n1存在，对比n1和n2的类型
       if (n1 && n1.type !== n2.type) {
@@ -592,14 +678,37 @@
           // n1存在，意味着打补丁
           patchElement(n1, n2)
         }
-      } else if (typeof type === 'object') {
-        // 如果n2.type的值的类型是对象，则它描述的是组件
-      } else if (type === 'xxx') {
-        // 其他vnode类型
+      } else if (type === Text) {
+        // 新vnode类型是Text，说明vnode是文本节点
+        if (!n1) {
+          const el = n2.el = createText(n2.children)
+          insert(el, container)
+        } else {
+          // 如果存在旧vnode，需要更新旧文本节点即可
+          const el = n2.el = n1.el
+          if (n2.children !== n1.children) {
+            setText(el, n2.children)
+          }
+        }
+      } else if (type === Fragment) {
+        if (!n1) {
+          n2.children.forEach(c => patch(null, c, container))
+        } else {
+          patchChildren(n1, n2, container)
+        }
       }
+      // else if (typeof type === 'object') {
+      //   // 如果n2.type的值的类型是对象，则它描述的是组件
+      // } else if (type === 'xxx') {
+      //   // 其他vnode类型
+      // }
 
     }
     function unmount (vnode) {
+      if (vnode.type === Fragment) {
+        vnode.children.forEach(c => unmount(c))
+        return
+      }
       const parent = vnode.el.parentNode
       if (parent) {
         parent.removeChild(vnode.el)
@@ -637,6 +746,12 @@
     insert (el, parent, anchor = null) {
       parent.insertBefore(el, anchor)
     },
+    createText (text) {
+      return document.createTextNode(text)
+    },
+    setText (el, text) {
+      el.nodeValue = text
+    },
     // 将属性设置相关操封装patchProps函数，并作为渲染器选项传递
     patchProps (el, key, preValue, nextValue) {
       // on开头，视其为事件 onClick
@@ -648,11 +763,19 @@
           if (!invoker) {
             // 如果没有invoker，则将一个伪造的invoker缓存到el._vei中
             invoker = el._vei[key] = (e) => {
-              // 当伪造的事件处理函数执行时，会执行真正的事件处理函数
-              invoker.value(e)
+              // e.timeStamp事件发生时间
+              if (e.timeStamp < invoker.attached) return
+              // 如果invoker.value是数组，则遍历它并逐个调用处理函数
+              if (Array.isArray(invoker.value)) {
+                invoker.value.forEach(fn => fn(e))
+              } else {
+                // 当伪造的事件处理函数执行时，会执行真正的事件处理函数
+                invoker.value(e)
+              }
             }
             // 将真正的事件处理函数赋值给invoker.value
             invoker.value = nextValue
+            invoker.attached = performance.now()
             el.addEventListener(name, invoker)
           } else {
             // 如果invoker存在意味着更新，并只需要更新invoker.value即可
@@ -678,12 +801,33 @@
       }
     }
   })
-  const count = ref(1)
-  
-  effect(() => {
-    renderer(`<span>${count.value}</span>`, document.getElementById('app'))
-  })
-  count.value++
+  const oldVNode = {
+    type: 'div',
+    children: [
+      { type: 'p', children: '1', key: 1 },
+      { type: 'p', children: '2', key: 2 },
+      { type: 'p', children: 'hello', key: 3 }
+    ]
+  }
+  const newVNode = {
+    type: 'div',
+    children: [
+      { type: 'p', children: 'world', key: 3 },
+      { type: 'p', children: '1', key: 1 },
+      { type: 'p', children: '2', key: 2 }
+    ]
+  }
+  renderer.render(oldVNode, document.getElementById('app'))
+  setTimeout(() => {
+    renderer.render(newVNode, document.getElementById('app'))
+  }, 1000)
+  /*
+    const count = ref(1)
+    effect(() => {
+      renderer(`<span>${count.value}</span>`, document.getElementById('app'))
+    })
+    count.value++
+  */
 
   // const _reactive = reactive({a:2, obj: { b: 1 }})
   // effect(() => {
