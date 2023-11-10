@@ -567,7 +567,7 @@
   }
   function createRenderer (options) {
     const { createElement, setElementText, insert, patchProps, createText, setText } = options
-    function mountElement (vnode, container) {
+    function mountElement (vnode, container, anchor) {
       // 创建DOM元素
       const el = vnode.el = createElement(vnode.type)
       // 处理子节点，如果子节点是字符串，代表元素具有文本节点
@@ -587,7 +587,42 @@
           patchProps(el, key, null, vnode.props[key])
         }
       }
-      insert(el, container)
+      insert(el, container, anchor)
+    }
+    function patchKeyedChildren (n1, n2, container) {
+      const oldChildren = n1.children
+      const newChildren = n2.children
+
+      let oldStartIdx = 0
+      let oldEndIdx = oldChildren.length - 1
+      let newStartIdx = 0
+      let newEndIdx = newChildren.length - 1
+
+      let oldStartVNode = oldChildren[oldStartIdx]
+      let oldEndVNode = oldChildren[oldEndIdx]
+      let newStartVNode = newChildren[newStartIdx]
+      let newEndVNode = newChildren[newEndIdx]
+      while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+        
+      }
+      if (oldStartVNode.key === newStartVNode.key) {
+
+      } else if (oldEndVNode.key === newEndVNode.key) {
+        // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需要补丁
+        patch(oldEndVNode, newStartVNode, container)
+        // 更新索引和头尾部节点变量
+        oldEndVNode = oldChildren[--oldEndIdx]
+        newEndVNode = newChildren[--newEndIdx]
+      } else if (oldStartVNode.key === newEndVNode.key) {
+
+      } else if (oldEndVNode.key === newStartVNode.key) {
+        patch(oldEndVNode, newStartVNode, container)
+        // oldEndVNode.el移动到oldStartVNode.el的前面
+        insert(oldEndVNode.el, container, newStartVNode.el)
+
+        oldEndVNode = oldChildren[--oldEndIdx]
+        newStartVNode = newChildren[++newStartIdx]
+      }
     }
     function patchChildren (n1, n2, container) {
       // 判断子节点的类型是否是文本节点
@@ -599,9 +634,71 @@
         }
         setElementText(container, n2.children)
       } else if (Array.isArray(n2.children)) {
-        // 新节点是一组数据 Diff
-        const oldChildren = n1.children
-        const newChildren = n2.children
+        patchKeyedChildren(n1, n2, container)
+        /* 简单diff
+          // 新节点是一组数据 Diff
+          const oldChildren = n1.children
+          const newChildren = n2.children
+
+          let lastIndex = 0
+          for (let i = 0; i < newChildren.length; i++) {
+            const newVNode = newChildren[i]
+            let j = 0
+            // 在第一层循环中定义变量find，代表是否在旧的一组节点中找到可复用的节点
+            // 初始值为false们代表没找到
+            let find = false
+            for (j; j < oldChildren.length; j++) {
+              const oldVNode = oldChildren[j]
+              if (newVNode.key === oldVNode.key) {
+                find = true
+                patch(oldVNode, newVNode, container)
+                if (j < lastIndex) {
+                  // 如果当前找到的节点在旧children中的索引小于最大索引值lastIndex，说明该节点对应的真实DOM需要移动
+                  const prevVNode = newChildren[i - 1]
+                  // 如果prevVNode不存在，说明当前newVNode是第一个节点，不需要移动
+                  if (prevVNode) {
+                    debugger
+                    // 由于要将newVNode所对应的真实DOM移动到prevVNode的所对应真实DOM后面，
+                    // 所以需要获取prevVNode的真实DOM的下一个兄弟节点，并将其作为锚点
+                    const anchor = prevVNode.el.nextSibling
+                    console.log(anchor, 'anchor')
+                    console.log(prevVNode.el)
+                    // 调用insert，将newVNode对应的真实DOM插入到锚点元素前，也就是prevVNode对应真实DOM后面
+                    insert(newVNode.el, container, anchor)
+                  }
+                } else {
+                  // 如果当前找到的节点在旧children中的索引不小于最大索引值，则更新lastIndex的值
+                  lastIndex = j
+                }
+                break
+              }
+            }
+            // 如果代码运行到这里，find仍然为false
+            // 说明当前newVNode没有在旧的一组子节点中找到可复用的节点
+            // 当前newVNOde是新增节点，挂载
+            if (!find) {
+              const prevVNode = newChildren[i - 1]
+              let anchor = null
+              if (prevVNode) {
+                anchor = prevVNode.el.nextSibling
+              } else {
+                anchor = container.firstChild
+              }
+              patch(null, newVNode, container, anchor)
+            }
+          }
+
+          for (let i = 0; i < oldChildren.length; i++) {
+            const oldVNode = oldChildren[i]
+            const has = newChildren.find(vnode => vnode.key === oldVNode.key)
+
+            if (!has) {
+              unmount(oldVNode)
+            }
+          }
+        */
+
+        /*
         for (let i = 0; i < newChildren.length; i++) {
           const newVNode = newChildren[i]
           for (let j = 0; j < oldChildren.length; j++) {
@@ -612,6 +709,8 @@
             }
           }
         }
+        */
+
         /*
           // 旧的一组子节点长度
           const oldLen = oldChildren.length
@@ -661,7 +760,7 @@
       // 更新children
       patchChildren(n1, n2, el)
     }
-    function patch (n1, n2, container) {
+    function patch (n1, n2, container, anchor) {
       // 如果n1存在，对比n1和n2的类型
       if (n1 && n1.type !== n2.type) {
         // 如果新旧vnode的类型不同，则直接将旧vnode卸载
@@ -673,7 +772,7 @@
       if (typeof type === 'string') {
         // 如果n1不存在，意味着挂载，则调用mountElement函数完成挂载
         if (!n1) {
-          mountElement(n2, container)
+          mountElement(n2, container, anchor)
         } else {
           // n1存在，意味着打补丁
           patchElement(n1, n2)
@@ -806,7 +905,8 @@
     children: [
       { type: 'p', children: '1', key: 1 },
       { type: 'p', children: '2', key: 2 },
-      { type: 'p', children: 'hello', key: 3 }
+      { type: 'p', children: 'hello', key: 3 },
+      // { type: 'p', children: '4', key: 4 }
     ]
   }
   const newVNode = {
@@ -814,7 +914,8 @@
     children: [
       { type: 'p', children: 'world', key: 3 },
       { type: 'p', children: '1', key: 1 },
-      { type: 'p', children: '2', key: 2 }
+      { type: 'p', children: '2', key: 2 },
+      { type: 'p', children: '4', key: 4 }
     ]
   }
   renderer.render(oldVNode, document.getElementById('app'))
