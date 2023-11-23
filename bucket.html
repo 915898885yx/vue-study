@@ -603,25 +603,29 @@
       let newStartVNode = newChildren[newStartIdx]
       let newEndVNode = newChildren[newEndIdx]
       while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
-        
-      }
-      if (oldStartVNode.key === newStartVNode.key) {
+        if (oldStartVNode.key === newStartVNode.key) {
+          patch(oldStartVNode, newStartVNode, container)
+          oldStartVNode = oldChildren[++oldStartIdx]
+          newStartVNode = newChildren[++newStartIdx]
+        } else if (oldEndVNode.key === newEndVNode.key) {
+          // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需要补丁
+          patch(oldEndVNode, newStartVNode, container)
+          // 更新索引和头尾部节点变量
+          oldEndVNode = oldChildren[--oldEndIdx]
+          newEndVNode = newChildren[--newEndIdx]
+        } else if (oldStartVNode.key === newEndVNode.key) {
+          // 调用patch函数在oldStartVNode 和newEndVNode之间打补丁
+          patch(oldStartVNode, newEndVNode, container)
+          // 将旧的一组子节点的头部节点对应的真实DOM节点oldStartVNode.el移动到旧的一组子节点的尾部节点对应的真实DOM节点后面
+          insert(oldStartVNode.el, container, newEndVNode.el.nextSibling)
+        } else if (oldEndVNode.key === newStartVNode.key) {
+          patch(oldEndVNode, newStartVNode, container)
+          // oldEndVNode.el移动到oldStartVNode.el的前面
+          insert(oldEndVNode.el, container, newStartVNode.el)
 
-      } else if (oldEndVNode.key === newEndVNode.key) {
-        // 节点在新的顺序中仍然处于尾部，不需要移动，但仍需要补丁
-        patch(oldEndVNode, newStartVNode, container)
-        // 更新索引和头尾部节点变量
-        oldEndVNode = oldChildren[--oldEndIdx]
-        newEndVNode = newChildren[--newEndIdx]
-      } else if (oldStartVNode.key === newEndVNode.key) {
-
-      } else if (oldEndVNode.key === newStartVNode.key) {
-        patch(oldEndVNode, newStartVNode, container)
-        // oldEndVNode.el移动到oldStartVNode.el的前面
-        insert(oldEndVNode.el, container, newStartVNode.el)
-
-        oldEndVNode = oldChildren[--oldEndIdx]
-        newStartVNode = newChildren[++newStartIdx]
+          oldEndVNode = oldChildren[--oldEndIdx]
+          newStartVNode = newChildren[++newStartIdx]
+        } 
       }
     }
     function patchChildren (n1, n2, container) {
