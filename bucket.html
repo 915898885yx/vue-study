@@ -603,7 +603,11 @@
       let newStartVNode = newChildren[newStartIdx]
       let newEndVNode = newChildren[newEndIdx]
       while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
-        if (oldStartVNode.key === newStartVNode.key) {
+        if (!oldStartVNode) {
+          oldStartVNode = oldChildren[++oldStartIdx]
+        } else if (!oldEndVNode) {
+          oldEndVNode = oldChildren[--oldEndIdx]
+        } else if (oldStartVNode.key === newStartVNode.key) {
           patch(oldStartVNode, newStartVNode, container)
           oldStartVNode = oldChildren[++oldStartIdx]
           newStartVNode = newChildren[++newStartIdx]
@@ -625,7 +629,30 @@
 
           oldEndVNode = oldChildren[--oldEndIdx]
           newStartVNode = newChildren[++newStartIdx]
-        } 
+        } else {
+          // 遍历旧children，试图寻找与newStartVNode相同key值的元素
+          const idxInOld = oldChildren.findIndex(node => node.key === newStartVNode.key)
+          if (idxInOld > 0) {
+            // 需要移动的节点
+            const vnodeToMove = oldChildren[idxInOld]
+            // 打补丁
+            patch(vnodeToMove, newStartVNode, container)
+            // 将vnodeToMove.el移动到头部节点oldStartVNode.el的前面，因此使用后者作为锚点
+            insert(vnodeToMove.el, container, oldStartVNode.el)
+            // 由于位置idxInOld处的节点所对应的真实DOM已经移动到了别处，因此将其设置为undefined
+            oldChildren[idxInOld] = undefined
+          } else {
+            // 新增的节点，将新节点挂载到头部，使用当前头部节点oldStartVNode.el作为锚点
+            patch(null, newStartVNode, container, oldStartVNode.el)
+          }
+          newStartVNode = newChildren[++newStartIdx]
+        }
+      }
+      // 循环结束后检查所引值的情况
+      if (oldEndIdx < oldStartIdx && newStartIdx <= newEndIdx) {
+        for (let i = newStartIdx; i <= newEndIdx; i++) {
+          patch(null, newChildren[i], container, oldStartVNode.el)
+        }
       }
     }
     function patchChildren (n1, n2, container) {
