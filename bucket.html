@@ -831,6 +831,13 @@
         } else {
           patchChildren(n1, n2, container)
         }
+      } else if (typeof type === 'object') {
+        if (!n1) {
+          mountComponent(n2, container, anchor)
+        } else {
+          // 更新组件
+          patchComponent(n1, n2, anchor)
+        }
       }
       // else if (typeof type === 'object') {
       //   // 如果n2.type的值的类型是对象，则它描述的是组件
