@@ -831,7 +831,7 @@
         } else {
           patchChildren(n1, n2, container)
         }
-      } else if (typeof type === 'object') {
+      } else if (typeof type === 'object' || typeof type === 'function') {
         if (!n1) {
           mountComponent(n2, container, anchor)
         } else {
@@ -849,6 +849,9 @@
     function unmount (vnode) {
       if (vnode.type === Fragment) {
         vnode.children.forEach(c => unmount(c))
+        return
+      } else if (typeof vnode.type === 'object') {
+        unmount(vnode.component.subTree)
         return
       }
       const parent = vnode.el.parentNode
