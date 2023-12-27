@@ -831,6 +831,24 @@
         } else {
           patchChildren(n1, n2, container)
         }
+      } else if (typeof type === 'object' && type.__isTeleport) {
+        // 组件选项存在__isTeleport标识，则它是Teleport组件
+        // 调用Teleport组件选项中process函数，将控制权交接
+        // 传递给process函数的第五个参数是渲染器的一些内部方法
+        type.processs(n1, n2, container, anchor, {
+          patch,
+          patchChildren,
+          unmount,
+          move(vnode, container, anchor) {
+            insert(
+              vnode.component
+                ? vnode.component.subTree.el // 移动一个组件
+                : vnode.el, // 移动普通元素
+              container,
+              anchor
+            )
+          }
+        })
       } else if (typeof type === 'object' || typeof type === 'function') {
         if (!n1) {
           if (n2.keptAlive) { // keepalive组件
