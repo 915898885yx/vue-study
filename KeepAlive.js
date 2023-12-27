@@ -1,10 +1,28 @@
 const KeepAlive = {
   // KeepAlive组件独有属性，用作标识
   __isKeepAlive: true,
+  props: {
+    include: RegExp,
+    exclude: RegExp,
+  },
   setup(props, { slots }) {
     // 创建一个缓存对象
     // key: vnode.type
-    const cache = new Map()
+    const _cache = new Map()
+    const cache = {
+      get (key) {
+        return _cache.get(key)
+      },
+      set (key, value) {
+        _cache.set(key, value)
+      },
+      delete (key) {
+        _cache.delete(key)
+      },
+      forEach (fn) {
+        _cache.forEach(fn)
+      }
+    }
     // 当前KeepAlive组件实例
     const instance = currentInstance
     // 对于KeepAlive组件来说，它的实例上存在特殊的keepAliveCtx对象，该对象由渲染器注入
@@ -26,6 +44,17 @@ const KeepAlive = {
       let rawVNode = slots.default()
       // 如果不是组件，直接渲染即可，因为非组件的虚拟节点无法被KeepAlive
       if (typeof rawVNode.type !== 'object') {
+        return rawVNode
+      }
+      // 获取组件内部的name值
+      const name = rawVNode.type.name
+      if (name && (
+        // 如果name无法被include匹配
+        (props.include && !props.include.test(name)) ||
+        // 或者被exlude匹配
+        (props.exclude && props.exclude.test(name))
+      )) {
+        // 直接渲染“内部组件”，不对其进行后续缓存操作
         return rawVNode
       }
       // 在挂载时先获取缓存的组件vnode
