@@ -833,7 +833,11 @@
         }
       } else if (typeof type === 'object' || typeof type === 'function') {
         if (!n1) {
-          mountComponent(n2, container, anchor)
+          if (n2.keptAlive) { // keepalive组件
+            n2.keepAliveInstance._deActivate(n2, container, anchor)
+          } else {
+            mountComponent(n2, container, anchor)
+          }
         } else {
           // 更新组件
           patchComponent(n1, n2, anchor)
@@ -851,7 +855,12 @@
         vnode.children.forEach(c => unmount(c))
         return
       } else if (typeof vnode.type === 'object') {
-        unmount(vnode.component.subTree)
+        if (vnode.shouldKeepAlive) {
+          // 被keepalive组件卸载应该调用父级组件keepalive的deActivate方法
+          vnode.keepAliveInstance._deActivate(vnode)
+        } else {
+          unmount(vnode.component.subTree)
+        }
         return
       }
       const parent = vnode.el.parentNode

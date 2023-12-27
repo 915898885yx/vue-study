@@ -61,6 +61,17 @@ function mountComponent (vnode, container, anchor) {
     mounted: []
   }
 
+  // 检查当前挂载的组件是否keepalive
+  const isKeepLiave = vnode.type.__isKeepAlive
+  if (isKeepLiave) {
+    instance.keepAliveCtx = {
+      move (vnode, container, anchor) {
+        insert(vnode.component.subTree.el, container, anchor)
+      },
+      createElement
+    }
+  }
+
   function emit(event, ...payload) {
     const eventName = `on${event[0].toUpperCase() + event.slice(1)}`
 
