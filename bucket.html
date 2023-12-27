@@ -587,7 +587,17 @@
           patchProps(el, key, null, vnode.props[key])
         }
       }
+      // 过渡
+      const needTransition = vnode.transition
+      if (needTransition) {
+        vnode.transition.beforeEnter(el)
+      }
+
       insert(el, container, anchor)
+      // 过渡
+      if (needTransition) {
+        vnode.transition.enter(el)
+      }
     }
     function patchKeyedChildren (n1, n2, container) {
       const oldChildren = n1.children
@@ -869,6 +879,7 @@
 
     }
     function unmount (vnode) {
+      const needTransition = vnode.transition
       if (vnode.type === Fragment) {
         vnode.children.forEach(c => unmount(c))
         return
@@ -883,7 +894,14 @@
       }
       const parent = vnode.el.parentNode
       if (parent) {
-        parent.removeChild(vnode.el)
+        // 过渡
+        const performRemove = () => parent.removeChild(vnode.el)
+        if (needTransition) {
+          vnode.transition.leave(vnode.el, performRemove)
+        } else {
+          performRemove()
+        }
+        // parent.removeChild(vnode.el)
       }
     }
     function render (vnode, container) {
