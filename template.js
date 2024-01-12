@@ -210,12 +210,17 @@ function dump (node, indent = 0) {
 function traverseNode (ast, context) {
   // 设置当前转换节点的信息 context.currentNode
   context.currentNode = ast
-
+  // 增加退出阶段的回调函数数组
+  const exitFns = []
   // context.nodeTransform是一个数组，其中每一个元素都是一个函数
   const transforms = context.nodeTransforms
   for (let i = 0; i < transforms.length; i++) {
     // 将当前节点currentNode和context都传递给nodeTransforms中注册的回掉函数
-    transforms[i](context.currentNode, context)
+    const onExit = transforms[i](context.currentNode, context)
+    if (onExit) {
+      // 将退出阶段的回调函数添加到exitFns中
+      exitFns.push(onExit)
+    }
     // 由于任何的转换函数都可能移除当前节点，因此每个转换函数执行完毕后
     // 都应该检查当前节点是否已经被移除，如果被移除了就直接返回即可
     if (!context.currentNode) return
@@ -229,6 +234,13 @@ function traverseNode (ast, context) {
       context.childIndex = i
       traverseNode(children[i], context)
     }
+  }
+
+  // 在节点处理的最后阶段执行缓存到exitFns中的回调函数
+  // 注意反序执行
+  let i = exitFns.length
+  while(i--) {
+    exitFns[i]()
   }
 }
 
@@ -272,11 +284,13 @@ function transform (ast) {
   dump(ast)
 }
 
-function transformElement(node) {
-  // 对当前节点进行操作
-  if (node.type === 'Element' && node.tag === 'p') {
-    // 将所有p标签转换为h1标签
-    node.tag = 'h1'
+function transformElement(node, context) {
+  // 进入节点
+
+  // 返回一个会在退出节点时执行的回调函数
+
+  return () => {
+    // 在这里编写退出节点逻辑，当这里的代码运行时，当前转换节点的子节点一定处理完毕了
   }
 }
 
@@ -291,6 +305,106 @@ function transformText(node, context) {
     // 如果是文本节点则移除
     context.removeNode()
   }
+}
+
+function render () {
+  // h函数第一个参数是一个字符串字面量
+  // h函数的第二个参数是一个数组
+  return h('div', [/**... */])
+}
+
+const CallExp = {
+  type: 'CallExpression',
+  callee: {
+    type: 'Identifier',
+    name: 'h'
+  },
+  // 参数
+  arguments: []
+}
+
+const Str = {
+  type: 'StringLiteral',
+  value: 'div'
+}
+
+const Arr = {
+  type: 'ArrayExpression',
+  // 数组中的元素
+  elements: []
+}
+
+const FunctionDeclNode = {
+  type: 'FunctionDecl', // 代表该节点时函数声明
+  // 函数的名称是一个标识符，标识符本身也是一个节点
+  id: {
+    type: 'Identifier',
+    name: 'render'
+  },
+  // 参数
+  params: [],
+  body: [
+    {
+      type: 'ReturnStatement',
+      // 最外层用h函数调用
+      return: {
+        type: 'CallExpression',
+        callee: {
+          type: 'Identifier',
+          name: 'h'
+        },
+        // 参数
+        arguments: [
+          // 第一个参数是字符串字面量‘div’
+          {
+            type: 'StringLiteral',
+            value: 'div'
+          },
+          // 第二个参数是数组
+          {
+            type: 'ArrayExpression',
+            elements: [
+              // 第一个元素是字符串字面量
+              {
+                type: 'CallExpression',
+                callee: {
+                  type: 'Identifier',
+                  name: 'h'
+                },
+                arguments: [
+                  {
+                    type: 'StringLiteral',
+                    value: 'p'
+                  },
+                  {
+                    type: 'StringLiteral',
+                    value: 'Vue'
+                  }
+                ]
+              },
+              {
+                type: 'CallExpression',
+                callee: {
+                  type: 'Identifier',
+                  name: 'h'
+                },
+                arguments: [
+                  {
+                    type: 'StringLiteral',
+                    value: 'p'
+                  },
+                  {
+                    type: 'StringLiteral',
+                    value: 'Template'
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }
 
 const p = '<div><p>Vue</p><p>Template</p></div>'
