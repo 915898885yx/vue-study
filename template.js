@@ -407,6 +407,36 @@ const FunctionDeclNode = {
   ]
 }
 
+// 创建StringLiteral节点
+function createStringLiteral (value) {
+  return {
+    type: 'StringLiteral',
+    value
+  }
+}
+
+function createIdentifier (name) {
+  return {
+    type: 'Identifier',
+    name
+  }
+}
+
+function createArrayExpression (elements) {
+  return {
+    type: 'ArrayExpression',
+    elements
+  }
+}
+
+function createCallExpression (callee, arguments) {
+  return {
+    type: 'CallExpression',
+    callee: createIdentifier(callee),
+    arguments
+  }
+}
+
 const p = '<div><p>Vue</p><p>Template</p></div>'
 const ast = parse(p)
 transform(ast)
