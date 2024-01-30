@@ -284,27 +284,63 @@ function transform (ast) {
   dump(ast)
 }
 
+function transformRoot(node) {
+  // 将逻辑编辑卸载退出阶段回调，保证子节点全部被处理完毕
+  return () => {
+    // 如果不是跟节点，什么都不做
+    if (node.type !== 'Root') {
+      return
+    }
+    const vnodeJSAST = node.children[0].jsNode
+    node.jsNode = {
+      type: 'FunctionDecl',
+      id: { type: 'Identifier', name: 'render' },
+      params: [],
+      body: [
+        {
+          type: 'ReturnStatement',
+          return: vnodeJSAST
+        }
+      ]
+    }
+  }
+}
+
 function transformElement(node, context) {
   // 进入节点
 
   // 返回一个会在退出节点时执行的回调函数
 
   return () => {
-    // 在这里编写退出节点逻辑，当这里的代码运行时，当前转换节点的子节点一定处理完毕了
+    // 将转换代码编写在退出阶段的回调函数中
+    // 这样可以保证该标签节点的字节点全部被处理完毕
+    if (node.type !== 'Element') {
+      return
+    }
+    // 1.创建h函数调用语句
+    // h函数调用的第一个参数的标签名称，因此我们以node.tag来创建一个字符串字面量节点作为第一个参数
+    const callExp = createCallExpression('h', [
+      createStringLiteral(node.tag)
+    ])
+    // 处理h函数调用语句的参数
+    node.children.length === 1
+      ? callExp.arguments.push(node.children[0].jsNode)
+      : callExp.arguments.push(
+        createArrayExpression(node.children.map(c => c.jsNode))
+      )
+    node.jsNode = callExp
   }
 }
 
 function transformText(node, context) {
-  // 如果是节点类型为Text，调用context.replaceNode函数将其替换为元素节点
-  if (node.type === 'Text') {
-    // node.content = node.content.repeat(2)
-    // context.replaceNode({
-    //   type: 'Element',
-    //   tag: 'span'
-    // })
-    // 如果是文本节点则移除
-    context.removeNode()
+  // 如果不是文本节点，则什么都不做
+  if (node.type !== 'Text') {
+    return
   }
+  // 文本节点对应的Javascript AST节点其实就是一个字符串字面量
+  // 因此只需要使用node.content创建一个StringLiteral类型的节点即可
+  // 最后将文本节点对应的JavaScript AST节点添加到node.jsNode属性下
+  node.jsNode = createStringLiteral(node.content)
 }
 
 function render () {
