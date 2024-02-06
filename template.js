@@ -1,3 +1,8 @@
+/**
+(1) 分析模板，将其解析为模板 AST。
+(2) 将模板 AST 转换为用于描述渲染函数的 JavaScript AST。
+(3) 根据 JavaScript AST 生成渲染函数代码。
+ */
 const State = {
   initial: 1, // 初始状态
   tagOpen: 2, // 标签开始
@@ -201,6 +206,7 @@ function dump (node, indent = 0) {
       : node.content
   // 打印节点的类型和描述信息
   console.log(`${'-'.repeat(indent)}${type}: ${desc}`)
+  // console.log(JSON.stringify(node, null, 2))
   // 递归地打印字节点
   if (node.children) {
     node.children.forEach(n => dump(n, indent + 2))
@@ -276,7 +282,8 @@ function transform (ast) {
     // 注册nodeTransforms数组
     nodeTransforms: [
       transformElement, // transformElement转换标签节点
-      transformText     // transformText转换文本节点
+      transformText,     // transformText转换文本节点
+      transformRoot
     ]
   }
   // 调用traverseNode完成转换
@@ -308,7 +315,9 @@ function transformRoot(node) {
 
 function transformElement(node, context) {
   // 进入节点
-
+  if (node.type === 'Element' && node.tag === 'p') {
+    node.tag = 'h1'
+  }
   // 返回一个会在退出节点时执行的回调函数
 
   return () => {
@@ -473,6 +482,135 @@ function createCallExpression (callee, arguments) {
   }
 }
 
+function generate (node) {
+  const context = {
+    // 存储最终生成的渲染函数代码
+    code: '',
+    // 在生成代码时，通过调用push函数完成代码拼接
+    push(code) {
+      context.code += code
+    },
+    // 当前锁进级别，初始值为0，即没有缩进
+    currentIndent: 0,
+    // 该函数用来换行，即在代码字符串的后面追加\n字符
+    // 另外，换行时应该保留缩紧，所以我们还要追加currrentIndent * 2 个空格字符
+    newline() {
+      context.code += '\n' + `  `.repeat(context.currentIndent)
+    },
+    // 缩进，让currentIndent自增后，调用换行函数
+    indent () {
+      context.currentIndent++
+      context.newline()
+    },
+    // 取消缩进
+    deIndent () {
+      context.currentIndent--
+      context.newline()
+    }
+  }
+  // 调用genNode函数完成代码生成
+  genNode (node, context)
+  console.log(node, 'node')
+  // 返回渲染函数代码
+  return context.code
+}
+
+function genNode (node, context) {
+  switch (node.type) {
+    case 'FunctionDecl':
+      genFunctionDecl(node, context)
+      break
+    case 'ReturnStatement':
+      genReturnStatement(node, context)
+      break
+    case 'CallExpression':
+      genCallExpression(node, context)
+      break
+    case 'StringLiteral':
+      genStringLiteral(node, context)
+      break
+    case 'ArrayExpression':
+      genArrayExpression(node, context)
+      break
+  }
+}
+
+function genFunctionDecl (node, context) {
+  // 从context取出工具函数
+  const { push, indent, deIndent } = context
+  push(`function ${node.id.name} `)
+  push(`(`)
+  // 调用genNodeList为函数的参数生成代码
+  genNodeList(node.params, context)
+  push(`) `)
+  push(`{`)
+  // 缩进
+  indent()
+  // 为函数体生成代码，这里递归调用genNode函数
+  node.body.forEach(n => genNode(n, context))
+  // 取消缩进
+  deIndent()
+  push(`}`)
+}
+
+function genArrayExpression (node, context) {
+  const { push } = context
+  // 追加方括号
+  push(`[`)
+  // 调用genNodeList为元素生成代码
+  genNodeList(node.elements, context)
+  // 补全放括号
+  push(`]`)
+}
+
+function genReturnStatement (node, context) {
+  const { push } = context
+  push(`return `)
+  genNode(node.return, context)
+}
+
+function genStringLiteral (node, context) {
+  const { push } = context
+  push(`${node.value}`)
+}
+
+function genCallExpression (node, context) {
+  const { push } = context
+  // 取得被调用函数名称和参数列表
+  const { callee, arguments: args } = node
+  // 生成函数调用代码
+  push(`${callee.name}(`)
+  genNodeList(args, context)
+  push(`)`)
+}
+
+function genNodeList (nodes, context) {
+  const { push } = context
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]
+    genNode(node, context)
+    if (i < nodes.length - 1) {
+      push(`, `)
+    }
+  }
+}
+
 const p = '<div><p>Vue</p><p>Template</p></div>'
-const ast = parse(p)
-transform(ast)
+
+function compile (template) {
+  // 模版AST
+  const ast = parse(template)
+  // 将模版AST转为javascriptAST
+  transform(ast)
+  console.log('--------')
+  console.log(JSON.stringify(ast.jsNode, null, 2))
+  console.log('--------')
+  // console.log(JSON.stringify(ast, null, 2), 'ast')
+  // 生成代码
+  const code = generate(ast.jsNode)
+  console.log(code, 'code')
+  return code
+}
+compile(p)
+// const ast = parse(p)
+// transform(ast)
